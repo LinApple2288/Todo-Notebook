@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>重要事务记事本 · 闹钟提醒</title>
+<style>
+  :root {
+    --pink-deep: #d97a91;
+    --pink-mid: #e8a4b4;
+    --pink-soft: #f5d2dc;
+    --pink-mist: #fbe7ec;
+    --rose: #c45a78;
+    --rose-light: #e98aa3;
+    --morandi-sage: #a8b5a0;
+    --morandi-blue: #a5b3c1;
+    --morandi-lavender: #c3b3d1;
+    --morandi-peach: #e5c0a8;
+    --morandi-rose: #d6a7ad;
+    --ink: #5d4a52;
+    --ink-soft: #8a757e;
+    --ink-mute: #b9a8af;
+    --white: #ffffff;
+    --shadow-soft: 0 8px 32px rgba(217, 122, 145, .12);
+    --shadow-hover: 0 14px 40px rgba(217, 122, 145, .22);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background:
+      radial-gradient(900px 600px at 10% -10%, #fbd6e0 0%, transparent 60%),
+      radial-gradient(700px 500px at 110% 10%, #e7d4f0 0%, transparent 55%),
+      radial-gradient(800px 600px at 50% 110%, #fbe5e9 0%, transparent 60%),
+      linear-gradient(145deg, #fdf3f6 0%, #f7e9ef 100%);
+    background-attachment: fixed;
+    min-height: 100vh;
+    color: var(--ink);
+    overflow-x: hidden;
+  }
+  body::before, body::after {
+    content: ""; position: fixed; pointer-events: none; z-index: 0;
+    border-radius: 50%; filter: blur(60px); opacity: .55;
+  }
+  body::before { width: 360px; height: 360px; background: #f6c4d3; top: -120px; left: -120px; }
+  body::after  { width: 320px; height: 320px; background: #d8c8e3; bottom: -120px; right: -100px; }
+  #app { position: relative; z-index: 1; max-width: 1080px; margin: 0 auto; padding: 36px 22px 100px; }
+
+  /* ===== 顶部 Hero ===== */
+  .hero { text-align: center; margin-bottom: 26px; animation: fadeDown .7s ease both; }
+  .hero h1 {
+    font-size: 34px; margin: 0 0 10px; letter-spacing: 3px; font-weight: 700;
+    background: linear-gradient(120deg, var(--pink-deep), var(--rose), var(--morandi-lavender));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero .sub { margin: 0 0 18px; color: var(--ink-soft); font-size: 14px; letter-spacing: 1px; }
+  .hero .sub .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--pink-mid); margin: 0 8px; vertical-align: middle; }
+  .clock-card {
+    display: inline-flex; align-items: center; gap: 16px;
+    background: rgba(255,255,255,.78); backdrop-filter: blur(12px);
+    border-radius: 18px; padding: 12px 22px;
+    border: 1px solid rgba(255,255,255,.85); box-shadow: var(--shadow-soft);
+  }
+  .clock-card .ring {
+    width: 60px; height: 60px; border-radius: 50%;
+    background: conic-gradient(var(--pink-deep) calc(var(--p) * 1%), #f4dbe2 0);
+    display: grid; place-items: center;
+  }
+  .clock-card .ring::before { content: ""; position: absolute; }
+  .clock-card .ring-inner {
+    width: 48px; height: 48px; border-radius: 50%; background: #fff;
+    display: grid; place-items: center; font-weight: 700; color: var(--pink-deep);
+    font-size: 14px;
+  }
+  .clock-card .clock-text { text-align: left; }
+  .clock-card .time { font-size: 22px; font-weight: 700; color: var(--ink); letter-spacing: 1px; font-variant-numeric: tabular-nums; }
+  .clock-card .date { font-size: 12px; color: var(--ink-soft); }
+
+  /* ===== 统计 ===== */
+  .stats {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 14px; margin-bottom: 22px;
+    animation: fadeDown .7s .1s ease both;
+  }
+  .stat-card {
+    position: relative; overflow: hidden;
+    background: rgba(255,255,255,.85); backdrop-filter: blur(10px);
+    border-radius: 20px; padding: 18px 20px;
+    box-shadow: var(--shadow-soft);
+    border: 1px solid rgba(255,255,255,.9);
+    transition: transform .3s ease, box-shadow .3s ease;
+  }
+  .stat-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-hover); }
+  .stat-card .num { font-size: 30px; font-weight: 700; color: var(--pink-deep); font-variant-numeric: tabular-nums; }
+  .stat-card:nth-child(2) .num { color: var(--morandi-sage); }
+  .stat-card:nth-child(3) .num { color: var(--morandi-peach); }
+  .stat-card:nth-child(4) .num { color: var(--morandi-blue); }
+  .stat-card:nth-child(5) .num { color: var(--morandi-lavender); }
+  .stat-card .label { font-size: 13px; color: var(--ink-soft); margin-top: 4px; }
+  .stat-card .deco {
+    position: absolute; right: -22px; top: -22px; width: 70px; height: 70px;
+    border-radius: 50%; opacity: .25;
+  }
+  .stat-card:nth-child(1) .deco { background: var(--pink-mid); }
+  .stat-card:nth-child(2) .deco { background: var(--morandi-sage); }
+  .stat-card:nth-child(3) .deco { background: var(--morandi-peach); }
+  .stat-card:nth-child(4) .deco { background: var(--morandi-blue); }
+  .stat-card:nth-child(5) .deco { background: var(--morandi-lavender); }
+
+  /* ===== 面板 ===== */
+  .panel {
+    background: rgba(255,255,255,.88); backdrop-filter: blur(14px);
+    border-radius: 24px; padding: 24px; margin-bottom: 20px;
+    box-shadow: var(--shadow-soft); border: 1px solid rgba(255,255,255,.9);
+    animation: fadeDown .7s .2s ease both;
+  }
+  .panel-title {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 16px; font-weight: 600; margin: 0 0 16px; color: var(--ink);
+  }
+  .panel-title::before {
+    content: ""; width: 4px; height: 18px; border-radius: 4px;
+    background: linear-gradient(var(--pink-deep), var(--pink-mid));
+  }
+  .panel-title .extra { margin-left: auto; font-size: 12px; color: var(--ink-soft); font-weight: normal; }
+
+  /* ===== 表单 ===== */
+  .form-grid {
+    display: grid; grid-template-columns: 1fr 1.4fr 1.1fr 1fr 1fr auto; gap: 10px; align-items: end;
+  }
+  @media (max-width: 880px) { .form-grid { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 540px) { .form-grid { grid-template-columns: 1fr; } }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-size: 12px; color: var(--ink-soft); }
+  .ipt, .sel, .ta {
+    width: 100%; border: 1px solid #efd6dd; background: #fff;
+    border-radius: 12px; padding: 10px 12px; font: inherit; color: var(--ink);
+    transition: border-color .2s, box-shadow .2s; outline: none;
+  }
+  .ta { min-height: 42px; max-height: 90px; resize: vertical; line-height: 1.5; }
+  .ipt:focus, .sel:focus, .ta:focus { border-color: var(--pink-mid); box-shadow: 0 0 0 4px rgba(232,164,180,.18); }
+  .btn {
+    border: none; cursor: pointer; padding: 10px 18px; border-radius: 12px;
+    font: inherit; font-weight: 600; transition: transform .15s, box-shadow .2s, background .2s;
+    display: inline-flex; align-items: center; gap: 6px; justify-content: center;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--pink-deep), var(--rose));
+    color: #fff; box-shadow: 0 6px 18px rgba(217,122,145,.32);
+  }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 10px 26px rgba(217,122,145,.42); }
+  .btn-primary:active { transform: none; }
+  .btn-ghost { background: #fbe7ec; color: var(--pink-deep); }
+  .btn-ghost:hover { background: #f7d5dd; }
+  .btn-soft { background: #fff; color: var(--ink); border: 1px solid #efd6dd; }
+  .btn-soft:hover { background: #fdf3f6; }
+  .btn-danger { background: #fff; color: #c4566a; border: 1px solid #f3c8d1; }
+  .btn-danger:hover { background: #fbe7ec; }
+
+  /* ===== 工具栏 ===== */
+  .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 16px; }
+  .toolbar .seg { display: inline-flex; background: #fbe7ec; padding: 4px; border-radius: 12px; gap: 4px; }
+  .toolbar .seg button {
+    border: none; background: transparent; cursor: pointer; padding: 7px 14px;
+    border-radius: 9px; font: inherit; font-size: 13px; color: var(--ink-soft);
+    transition: all .2s;
+  }
+  .toolbar .seg button.on { background: #fff; color: var(--pink-deep); box-shadow: 0 2px 8px rgba(217,122,145,.18); font-weight: 600; }
+  .toolbar .right { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+  .toolbar .search { position: relative; }
+  .toolbar .search input { padding-left: 32px; min-width: 180px; }
+  .toolbar .search::before {
+    content: "🔍"; position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+    font-size: 13px; opacity: .65;
+  }
+
+  /* ===== 任务列表 ===== */
+  .task-list { display: flex; flex-direction: column; gap: 12px; }
+  .task-item {
+    position: relative;
+    display: flex; align-items: flex-start; gap: 14px;
+    background: #fff; border-radius: 18px; padding: 16px 18px;
+    border: 1px solid #f3dbe2; box-shadow: 0 4px 16px rgba(217,122,145,.08);
+    transition: transform .25s, box-shadow .25s, opacity .25s;
+    animation: fadeIn .4s ease both;
+  }
+  .task-item:hover { transform: translateX(4px); box-shadow: var(--shadow-hover); }
+  .task-item.done { opacity: .55; }
+  .task-item.done .task-title { text-decoration: line-through; color: var(--ink-mute); }
+  .task-item.firing { animation: shake .6s infinite; box-shadow: 0 0 0 4px rgba(217,122,145,.35), var(--shadow-hover); }
+  .priority-bar {
+    width: 5px; border-radius: 3px; align-self: stretch; flex-shrink: 0;
+    background: var(--pink-mid);
+  }
+  .task-item[data-prio="urgent"] .priority-bar { background: linear-gradient(var(--rose), var(--pink-deep)); }
+  .task-item[data-prio="high"]   .priority-bar { background: linear-gradient(var(--pink-deep), var(--pink-mid)); }
+  .task-item[data-prio="normal"] .priority-bar { background: var(--morandi-lavender); }
+  .task-item[data-prio="low"]    .priority-bar { background: var(--morandi-sage); }
+
+  .checkbox {
+    width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+    border: 2px solid #e8c5d0; background: #fff; cursor: pointer;
+    display: grid; place-items: center; transition: all .2s; margin-top: 2px;
+  }
+  .checkbox:hover { border-color: var(--pink-mid); }
+  .checkbox.on { background: linear-gradient(135deg, var(--pink-deep), var(--rose)); border-color: transparent; color: #fff; }
+
+  .task-body { flex: 1; min-width: 0; }
+  .task-title { font-size: 15.5px; font-weight: 600; color: var(--ink); word-break: break-all; line-height: 1.5; }
+  .task-note { font-size: 13px; color: var(--ink-soft); margin-top: 4px; line-height: 1.6; white-space: pre-wrap; }
+  .task-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; align-items: center; }
+  .tag {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 12px; padding: 3px 9px; border-radius: 999px;
+    background: var(--pink-mist); color: var(--pink-deep); font-weight: 500;
+  }
+  .tag.tag-urgent { background: #fbdfe5; color: var(--rose); }
+  .tag.tag-high { background: #fbe7ec; color: var(--pink-deep); }
+  .tag.tag-normal { background: #ece4f3; color: var(--morandi-lavender); }
+  .tag.tag-low { background: #e6ece2; color: var(--morandi-sage); }
+  .tag.tag-cat { background: #fde9da; color: #b8825d; }
+  .tag.tag-repeat { background: #e3ecf3; color: #688399; }
+  .countdown {
+    font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 600;
+    padding: 4px 10px; border-radius: 8px; background: #fff5f8; color: var(--pink-deep);
+    border: 1px dashed #f3dbe2;
+  }
+  .countdown.urgent { background: #fbdfe5; color: var(--rose); border-color: #f3bccb; animation: pulse 1.2s infinite; }
+  .countdown.overdue { background: #f5bcc6; color: #fff; border-color: transparent; }
+
+  .task-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .icon-btn {
+    width: 34px; height: 34px; border-radius: 10px; border: 1px solid transparent;
+    background: transparent; cursor: pointer; display: grid; place-items: center;
+    font-size: 15px; color: var(--ink-soft); transition: all .2s;
+  }
+  .icon-btn:hover { background: #fbe7ec; color: var(--pink-deep); border-color: #f3dbe2; }
+  .icon-btn.del:hover { background: #fbdfe5; color: var(--rose); border-color: #f3bccb; }
+
+  /* ===== 空状态 ===== */
+  .empty { text-align: center; padding: 50px 0; color: var(--ink-soft); }
+  .empty .icon { font-size: 46px; margin-bottom: 10px; opacity: .55; }
+  .empty .hint { font-size: 12px; color: var(--ink-mute); margin-top: 6px; }
+
+  /* ===== 闹钟弹窗 ===== */
+  .modal-mask {
+    position: fixed; inset: 0; background: rgba(93,74,82,.45); backdrop-filter: blur(8px);
+    z-index: 99; display: grid; place-items: center;
+    animation: fadeIn .25s ease;
+  }
+  .modal {
+    width: min(420px, 90vw); background: #fff; border-radius: 22px; padding: 28px;
+    box-shadow: 0 30px 60px rgba(217,122,145,.4); text-align: center;
+    animation: pop .35s cubic-bezier(.2,.8,.3,1.3);
+    background-image: radial-gradient(400px 200px at 50% -20%, #fbdfe6 0%, transparent 60%);
+  }
+  .modal .bell { font-size: 56px; animation: bellRing 1s infinite; }
+  .modal h3 { margin: 10px 0 6px; color: var(--pink-deep); font-size: 20px; }
+  .modal .note { color: var(--ink-soft); font-size: 14px; line-height: 1.6; max-height: 110px; overflow: auto; }
+  .modal .due { color: var(--ink-mute); font-size: 12px; margin-top: 10px; }
+  .modal .actions { display: flex; gap: 10px; margin-top: 18px; justify-content: center; }
+  .modal .actions .btn { min-width: 100px; }
+
+  /* ===== 通知 toast ===== */
+  .toasts { position: fixed; top: 20px; right: 20px; z-index: 200; display: flex; flex-direction: column; gap: 10px; }
+  .toast {
+    background: #fff; border-left: 4px solid var(--pink-deep);
+    padding: 12px 16px; border-radius: 10px; min-width: 200px; max-width: 320px;
+    box-shadow: 0 10px 30px rgba(217,122,145,.18);
+    animation: slideIn .3s ease;
+    font-size: 13px;
+  }
+  .toast.success { border-color: var(--morandi-sage); }
+  .toast.warn { border-color: var(--morandi-peach); }
+  .toast.err { border-color: var(--rose); }
+
+  /* ===== 滚动条 ===== */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: #f3dbe2; border-radius: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  @keyframes fadeDown { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: none; } }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes pop { from { opacity: 0; transform: scale(.85); } to { opacity: 1; transform: scale(1); } }
+  @keyframes slideIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: none; } }
+  @keyframes shake { 0%,100%{transform:translateX(0);} 25%{transform:translateX(-4px);} 75%{transform:translateX(4px);} }
+  @keyframes pulse { 0%,100%{transform:scale(1);} 50%{transform:scale(1.04);} }
+  @keyframes bellRing { 0%,50%,100%{transform:rotate(0);} 10%,30%{transform:rotate(-15deg);} 20%,40%{transform:rotate(15deg);} }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Hero -->
+  <div class="hero">
+    <h1>重要事务记事本</h1>
+    <p class="sub"><span class="dot"></span>记录关键任务 · 闹钟准时提醒 · 从容不遗漏<span class="dot"></span></p>
+    <div class="clock-card">
+      <div class="ring" :style="`--p:${progress}%`">
+        <div class="ring-inner">{{ progress }}%</div>
+      </div>
+      <div class="clock-text">
+        <div class="time">{{ nowText }}</div>
+        <div class="date">{{ dateText }} · {{ weekdayText }}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 统计 -->
+  <div class="stats">
+    <div class="stat-card"><div class="deco"></div><div class="num">{{ stats.total }}</div><div class="label">全部事务</div></div>
+    <div class="stat-card"><div class="deco"></div><div class="num">{{ stats.done }}</div><div class="label">已完成</div></div>
+    <div class="stat-card"><div class="deco"></div><div class="num">{{ stats.pending }}</div><div class="label">待办中</div></div>
+    <div class="stat-card"><div class="deco"></div><div class="num">{{ stats.today }}</div><div class="label">今日到期</div></div>
+    <div class="stat-card"><div class="deco"></div><div class="num">{{ stats.overdue }}</div><div class="label">已逾期</div></div>
+  </div>
+
+  <!-- 新建 / 编辑面板 -->
+  <div class="panel">
+    <p class="panel-title">
+      {{ editingId ? '编辑事务' : '新建重要事务' }}
+      <span class="extra" v-if="editingId">正在编辑现有事务</span>
+    </p>
+    <div class="form-grid">
+      <div class="field">
+        <label>标题 *</label>
+        <input class="ipt" v-model="form.title" placeholder="例如：提交周报" maxlength="60" @keyup.enter="submitForm">
+      </div>
+      <div class="field">
+        <label>备注说明</label>
+        <textarea class="ta" v-model="form.note" placeholder="可写详细要求、链接等" maxlength="300"></textarea>
+      </div>
+      <div class="field">
+        <label>提醒时间</label>
+        <input class="ipt" type="datetime-local" v-model="form.due">
+      </div>
+      <div class="field">
+        <label>优先级</label>
+        <select class="sel" v-model="form.priority">
+          <option value="urgent">紧急</option>
+          <option value="high">重要</option>
+          <option value="normal">普通</option>
+          <option value="low">低</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>分类标签</label>
+        <input class="ipt" v-model="form.category" placeholder="如 工作 / 生活" maxlength="12">
+      </div>
+      <div class="field">
+        <label>&nbsp;</label>
+        <div style="display:flex; gap:6px;">
+          <button class="btn btn-primary" @click="submitForm">{{ editingId ? '保存修改' : '＋ 添加' }}</button>
+          <button class="btn btn-soft" v-if="editingId" @click="cancelEdit">取消</button>
+        </div>
+      </div>
+    </div>
+    <div class="toolbar" style="margin-top:14px; margin-bottom:0;">
+      <label style="font-size:13px; color:var(--ink-soft); display:flex; align-items:center; gap:6px;">
+        <input type="checkbox" v-model="form.repeat" style="accent-color: var(--pink-deep);"> 每天重复提醒
+      </label>
+      <div class="right">
+        <button class="btn btn-soft" @click="exportData">导出 JSON</button>
+        <label class="btn btn-soft" style="cursor:pointer;">
+          导入 JSON
+          <input type="file" accept="application/json" @change="importData" style="display:none;">
+        </label>
+        <button class="btn btn-ghost" @click="testRing">试听铃声</button>
+        <button class="btn btn-danger" v-if="tasks.length" @click="clearAll">清空全部</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 列表 -->
+  <div class="panel">
+    <p class="panel-title">
+      我的事务
+      <span class="extra">{{ visibleTasks.length }} / {{ tasks.length }}</span>
+    </p>
+    <div class="toolbar">
+      <div class="seg">
+        <button :class="{on: filter==='all'}"     @click="filter='all'">全部</button>
+        <button :class="{on: filter==='pending'}" @click="filter='pending'">待办</button>
+        <button :class="{on: filter==='done'}"    @click="filter='done'">已完成</button>
+        <button :class="{on: filter==='urgent'}"  @click="filter='urgent'">已逾期</button>
+        <button :class="{on: filter==='today'}"   @click="filter='today'">今日</button>
+      </div>
+      <div class="search"><input class="ipt" v-model="search" placeholder="搜索标题或备注..."></div>
+      <select class="sel" v-model="sort" style="width:auto; min-width:140px;">
+        <option value="due">按到期时间</option>
+        <option value="created">按创建时间</option>
+        <option value="priority">按优先级</option>
+        <option value="title">按标题</option>
+      </select>
+    </div>
+
+    <div class="task-list" v-if="visibleTasks.length">
+      <div class="task-item"
+           v-for="t in visibleTasks" :key="t.id"
+           :class="{ done: t.done, firing: firingId===t.id }"
+           :data-prio="t.priority || 'normal'">
+        <div class="priority-bar"></div>
+        <div class="checkbox" :class="{on: t.done}" @click="toggleDone(t)">
+          <span v-if="t.done">✓</span>
+        </div>
+        <div class="task-body">
+          <div class="task-title">{{ t.title }}</div>
+          <div class="task-note" v-if="t.note">{{ t.note }}</div>
+          <div class="task-meta">
+            <span class="tag" :class="'tag-' + (t.priority || 'normal')">{{ priorityLabel(t.priority) }}</span>
+            <span class="tag tag-cat" v-if="t.category">📂 {{ t.category }}</span>
+            <span class="tag tag-repeat" v-if="t.repeat">🔁 每日重复</span>
+            <span class="tag" v-if="t.due">⏰ {{ formatDue(t.due) }}</span>
+            <span class="countdown" :class="countdownClass(t)" v-if="t.due && !t.done">{{ countdown(t) }}</span>
+          </div>
+        </div>
+        <div class="task-actions">
+          <button class="icon-btn" title="立即提醒" @click="notifyNow(t)">🔔</button>
+          <button class="icon-btn" title="编辑" @click="editTask(t)">✎</button>
+          <button class="icon-btn del" title="删除" @click="removeTask(t)">🗑</button>
+        </div>
+      </div>
+    </div>
+    <div class="empty" v-else>
+      <div class="icon">🌸</div>
+      <div>{{ emptyText }}</div>
+      <div class="hint">{{ tasks.length ? '试试调整筛选或搜索条件' : '在上方表单填写标题开始记录' }}</div>
+    </div>
+  </div>
+
+  <!-- 闹钟弹窗 -->
+  <div class="modal-mask" v-if="firingTask" @click.self="dismissFiring(false)">
+    <div class="modal">
+      <div class="bell">🔔</div>
+      <h3>事务提醒</h3>
+      <div class="note">{{ firingTask.title }}</div>
+      <div class="note" v-if="firingTask.note" style="margin-top:6px;">{{ firingTask.note }}</div>
+      <div class="due">提醒时间：{{ formatDue(firingTask.due) }}</div>
+      <div class="actions">
+        <button class="btn btn-soft" @click="snoozeFiring(5)">5 分钟后再响</button>
+        <button class="btn btn-primary" @click="dismissFiring(true)">已完成</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 确认弹窗 -->
+  <div class="modal-mask" v-if="confirm">
+    <div class="modal" style="text-align:left;">
+      <h3 style="text-align:center;">{{ confirm.title }}</h3>
+      <div class="note" style="text-align:center;">{{ confirm.body }}</div>
+      <div class="actions">
+        <button class="btn btn-soft" @click="confirm.no">取消</button>
+        <button class="btn btn-danger" @click="confirm.yes()">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast 容器 -->
+  <div class="toasts">
+    <div v-for="t in toasts" :key="t.id" class="toast" :class="t.type">{{ t.msg }}</div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script>
+const { createApp, ref, computed, reactive, onMounted, onBeforeUnmount, watch } = Vue;
+
+/* ========== 存储 ========== */
+const STORE_KEY = 'important-notes-v2';
+const FIRED_KEY = 'fired-notes-v2';
+const load = () => { try { return JSON.parse(localStorage.getItem(STORE_KEY)) || []; } catch { return []; } };
+
+/* ========== 工具 ========== */
+const fmtDue = (d) => {
+  if (!d) return '';
+  const dt = new Date(d);
+  return `${dt.getMonth()+1}/${dt.getDate()} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+};
+const toLocalInput = (d) => {
+  if (!d) return '';
+  const dt = new Date(d);
+  const pad = (n) => String(n).padStart(2,'0');
+  return `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+};
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+
+/* ========== 铃声（Web Audio 合成，无需外部文件） ========== */
+let audioCtx = null;
+const getCtx = () => {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch {}
+  }
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+};
+const playRing = (style = 'bell') => {
+  const ctx = getCtx(); if (!ctx) return;
+  const now = ctx.currentTime;
+  const beep = (freq, t, dur, gain = .25, type = 'sine') => {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type; o.frequency.value = freq;
+    o.connect(g); g.connect(ctx.destination);
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(gain, t + .02);
+    g.gain.exponentialRampToValueAtTime(.001, t + dur);
+    o.start(t); o.stop(t + dur);
+  };
+  if (style === 'bell') {
+    beep(880, now, .5, .22); beep(1320, now + .15, .5, .18);
+    beep(880, now + .8, .5, .22); beep(1320, now + .95, .5, .18);
+  } else if (style === 'chime') {
+    beep(660, now, .8, .18); beep(880, now + .2, .8, .18); beep(990, now + .4, .8, .18);
+  } else if (style === 'alert') {
+    for (let i = 0; i < 4; i++) { beep(980, now + i * .35, .18, .22); beep(740, now + i * .35 + .09, .18, .18); }
+  } else if (style === 'soft') {
+    beep(523, now, 1.2, .15); beep(659, now + .25, 1.2, .15); beep(784, now + .5, 1.5, .15);
+  }
+};
+
+/* ========== Vue ========== */
+createApp({
+  setup() {
+    const tasks = ref(load());
+    const filter = ref('all');
+    const sort = ref('due');
+    const search = ref('');
+    const editingId = ref('');
+
+    const emptyForm = () => ({ title: '', note: '', due: '', priority: 'normal', category: '', repeat: false });
+    const form = reactive(emptyForm());
+
+    const now = ref(new Date());
+    const nowText = computed(() => {
+      const d = now.value;
+      const pad = n => String(n).padStart(2, '0');
+      return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    });
+    const dateText = computed(() => `${now.value.getFullYear()}-${now.value.getMonth()+1}-${now.value.getDate()}`);
+    const weekdayText = computed(() => '星期' + '日一二三四五六'[now.value.getDay()]);
+    const progress = computed(() => {
+      const t = tasks.value; if (!t.length) return 0;
+      return Math.round(t.filter(x => x.done).length / t.length * 100);
+    });
+
+    /* ====== 统计 ====== */
+    const stats = computed(() => {
+      const t = tasks.value;
+      const todayStr = new Date().toDateString();
+      const overdue = t.filter(x => !x.done && x.due && new Date(x.due) < now.value).length;
+      return {
+        total: t.length,
+        done: t.filter(x => x.done).length,
+        pending: t.filter(x => !x.done).length,
+        today: t.filter(x => !x.done && x.due && new Date(x.due).toDateString() === todayStr).length,
+        overdue,
+      };
+    });
+
+    /* ====== 筛选/排序/搜索 ====== */
+    const visibleTasks = computed(() => {
+      const nowT = now.value.getTime();
+      const todayStr = now.value.toDateString();
+      const kw = search.value.trim().toLowerCase();
+      let list = tasks.value.filter(t => {
+        if (filter.value === 'done') return t.done;
+        if (filter.value === 'pending') return !t.done;
+        if (filter.value === 'urgent') return !t.done && t.due && new Date(t.due).getTime() < nowT;
+        if (filter.value === 'today')  return !t.done && t.due && new Date(t.due).toDateString() === todayStr;
+        return true;
+      });
+      if (kw) list = list.filter(t => (t.title + ' ' + (t.note||'') + ' ' + (t.category||'')).toLowerCase().includes(kw));
+      const prioRank = { urgent: 0, high: 1, normal: 2, low: 3 };
+      list = list.slice().sort((a, b) => {
+        if (a.done !== b.done) return a.done ? 1 : -1;
+        if (sort.value === 'due') {
+          const ax = a.due ? new Date(a.due).getTime() : Infinity;
+          const bx = b.due ? new Date(b.due).getTime() : Infinity;
+          return ax - bx;
+        }
+        if (sort.value === 'created') return new Date(b.createdAt) - new Date(a.createdAt);
+        if (sort.value === 'priority') return (prioRank[a.priority||'normal']||2) - (prioRank[b.priority||'normal']||2);
+        if (sort.value === 'title') return (a.title||'').localeCompare(b.title||'', 'zh-CN');
+        return 0;
+      });
+      return list;
+    });
+    const emptyText = computed(() => ({
+      all: '暂无事务，先添加一条吧～',
+      pending: '没有待办事项，太棒了！',
+      done: '还没有已完成的记录',
+      urgent: '没有逾期事务，保持下去！',
+      today: '今天没有安排，加油～',
+    })[filter.value]);
+
+    /* ====== 持久化 ====== */
+    const save = () => localStorage.setItem(STORE_KEY, JSON.stringify(tasks.value));
+    watch(tasks, save, { deep: true });
+
+    /* ====== Toast & Confirm ====== */
+    const toasts = ref([]);
+    const toast = (msg, type = '') => {
+      const id = uid();
+      toasts.value.push({ id, msg, type });
+      setTimeout(() => { toasts.value = toasts.value.filter(x => x.id !== id); }, 2400);
+    };
+    const confirm = ref(null);
+    const askConfirm = (title, body) => new Promise(resolve => {
+      confirm.value = {
+        title, body, yes: () => { confirm.value = null; resolve(true); }, no: () => { confirm.value = null; resolve(false); }
+      };
+    });
+
+    /* ====== 表单操作 ====== */
+    const submitForm = () => {
+      if (!form.title.trim()) { toast('请填写事务标题', 'warn'); return; }
+      const payload = {
+        title: form.title.trim(),
+        note: form.note.trim(),
+        due: form.due || '',
+        priority: form.priority || 'normal',
+        category: form.category.trim(),
+        repeat: !!form.repeat,
+      };
+      if (editingId.value) {
+        const i = tasks.value.findIndex(x => x.id === editingId.value);
+        if (i >= 0) tasks.value[i] = { ...tasks.value[i], ...payload };
+        editingId.value = '';
+        toast('已保存修改', 'success');
+      } else {
+        tasks.value.unshift({ id: uid(), done: false, createdAt: new Date().toISOString(), ...payload });
+        toast('已添加到记事本', 'success');
+      }
+      Object.assign(form, emptyForm());
+    };
+    const editTask = (t) => {
+      editingId.value = t.id;
+      Object.assign(form, {
+        title: t.title, note: t.note || '', due: toLocalInput(t.due),
+        priority: t.priority || 'normal', category: t.category || '', repeat: !!t.repeat,
+      });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+    const cancelEdit = () => { editingId.value = ''; Object.assign(form, emptyForm()); };
+
+    const toggleDone = (t) => {
+      t.done = !t.done;
+      if (t.done) toast('已标记为完成 ✓', 'success');
+    };
+    const removeTask = async (t) => {
+      const ok = await askConfirm('删除事务', `确定删除「${t.title}」吗？`);
+      if (!ok) return;
+      tasks.value = tasks.value.filter(x => x.id !== t.id);
+      toast('已删除', 'success');
+    };
+    const clearAll = async () => {
+      const ok = await askConfirm('清空全部', '将删除所有事务，此操作不可恢复，确定吗？');
+      if (!ok) return;
+      tasks.value = [];
+      toast('已清空', 'success');
+    };
+
+    /* ====== 倒计时 / 提醒文案 ====== */
+    const countdown = (t) => {
+      const diff = new Date(t.due).getTime() - now.value.getTime();
+      if (diff < 0) {
+        const ad = Math.abs(diff);
+        const d = Math.floor(ad / 86400e3), h = Math.floor(ad % 86400e3 / 3600e3), m = Math.floor(ad % 3600e3 / 60e3);
+        return d > 0 ? `已逾期 ${d}天 ${h}时` : `已逾期 ${h}时 ${m}分`;
+      }
+      const d = Math.floor(diff / 86400e3), h = Math.floor(diff % 86400e3 / 3600e3), m = Math.floor(diff % 3600e3 / 60e3), s = Math.floor(diff % 60e3 / 1000);
+      if (d > 0) return `还剩 ${d}天 ${h}时`;
+      if (h > 0) return `还剩 ${h}时 ${m}分`;
+      if (m > 0) return `还剩 ${m}分 ${s}秒`;
+      return `还剩 ${s} 秒`;
+    };
+    const countdownClass = (t) => {
+      if (t.done) return '';
+      const diff = new Date(t.due).getTime() - now.value.getTime();
+      if (diff < 0) return 'overdue';
+      if (diff < 3600e3) return 'urgent';
+      return '';
+    };
+    const priorityLabel = (p) => ({ urgent: '紧急', high: '重要', normal: '普通', low: '低' }[p] || '普通');
+    const formatDue = (d) => fmtDue(d);
+
+    /* ====== 闹钟触发 ====== */
+    const firedIds = ref(new Set(JSON.parse(localStorage.getItem(FIRED_KEY) || '[]')));
+    const firingTask = ref(null);
+    const firingId = computed(() => firingTask.value?.id || '');
+    const saveFired = () => localStorage.setItem(FIRED_KEY, JSON.stringify([...firedIds.value]));
+
+    const fireNotification = (title, body) => {
+      if (!('Notification' in window)) return;
+      if (Notification.permission === 'granted') new Notification(title, { body, silent: false });
+      else if (Notification.permission !== 'denied') Notification.requestPermission().then(p => { if (p === 'granted') new Notification(title, { body }); });
+    };
+
+    const triggerAlarm = (t) => {
+      firingTask.value = t;
+      playRing('bell');
+      fireNotification('⏰ 事务到期：' + t.title, t.note || '该事务已到提醒时间，请及时处理');
+      // 循环播放直到用户处理
+      t._ringTimer = setInterval(() => { if (firingTask.value && firingTask.value.id === t.id) playRing('bell'); }, 2500);
+    };
+
+    const dismissFiring = (markDone) => {
+      if (!firingTask.value) return;
+      if (markDone) {
+        const t = tasks.value.find(x => x.id === firingTask.value.id);
+        if (t) t.done = true;
+        toast('已标记完成', 'success');
+      }
+      clearInterval(firingTask.value._ringTimer);
+      firingTask.value = null;
+    };
+    const snoozeFiring = (minutes) => {
+      if (!firingTask.value) return;
+      const t = tasks.value.find(x => x.id === firingTask.value.id);
+      if (t) {
+        const nd = new Date(Date.now() + minutes * 60e3);
+        t.due = nd.toISOString().slice(0, 16); // 写入 datetime-local 格式字符串
+        firedIds.value.delete(t.id);
+        saveFired();
+      }
+      clearInterval(firingTask.value._ringTimer);
+      firingTask.value = null;
+      toast(`已延后 ${minutes} 分钟`, 'success');
+    };
+
+    const notifyNow = (t) => {
+      playRing('chime');
+      fireNotification('🔔 立即提醒：' + t.title, t.note || '请尽快处理该事务');
+      toast('已发送提醒通知');
+    };
+
+    /* ====== 检测到期（每秒） ====== */
+    const tick = () => {
+      now.value = new Date();
+      const nowT = now.value.getTime();
+      tasks.value.forEach(t => {
+        if (t.done || !t.due) return;
+        const due = new Date(t.due).getTime();
+        if (due <= nowT && !firedIds.value.has(t.id)) {
+          firedIds.value.add(t.id);
+          saveFired();
+          triggerAlarm(t);
+          // 每日重复：处理后重置到明天同一时间
+          if (t.repeat) {
+            const tomorrow = new Date(due + 86400e3);
+            t.due = tomorrow.toISOString().slice(0, 16);
+            firedIds.value.delete(t.id);
+            saveFired();
+          }
+        }
+      });
+    };
+
+    /* ====== 导入 / 导出 ====== */
+    const exportData = () => {
+      const blob = new Blob([JSON.stringify(tasks.value, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `重要事务-${dateText.value}.json`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toast('已导出 JSON', 'success');
+    };
+    const importData = (e) => {
+      const f = e.target.files[0]; if (!f) return;
+      const r = new FileReader();
+      r.onload = async () => {
+        try {
+          const data = JSON.parse(r.result);
+          if (!Array.isArray(data)) throw new Error('格式错误');
+          const ok = await askConfirm('导入数据', `将合并 ${data.length} 条事务到当前列表，继续吗？`);
+          if (!ok) return;
+          data.forEach(it => {
+            if (!it.id) it.id = uid();
+            if (!tasks.value.some(x => x.id === it.id)) tasks.value.push(it);
+          });
+          toast('导入完成', 'success');
+        } catch (err) { toast('导入失败：' + err.message, 'err'); }
+        e.target.value = '';
+      };
+      r.readAsText(f);
+    };
+    const testRing = () => { playRing('bell'); setTimeout(() => playRing('chime'), 1200); };
+
+    /* ====== 生命周期 ====== */
+    let timer = null;
+    onMounted(() => {
+      if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
+      timer = setInterval(tick, 1000);
+    });
+    onBeforeUnmount(() => clearInterval(timer));
+
+    return {
+      tasks, filter, sort, search, editingId, form,
+      stats, visibleTasks, emptyText,
+      nowText, dateText, weekdayText, progress,
+      toasts, confirm,
+      submitForm, editTask, cancelEdit, toggleDone, removeTask, clearAll,
+      countdown, countdownClass, priorityLabel, formatDue,
+      notifyNow, dismissFiring, snoozeFiring, firingTask, firingId,
+      exportData, importData, testRing,
+    };
+  }
+}).mount('#app');
+</script>
+</body>
+</html>
